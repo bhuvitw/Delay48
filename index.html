@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>48-Hour Buffer Vault</title>
+  <link rel="manifest" href="manifest.json">
+  <script>
+      if ('serviceWorker' in navigator) {
+          navigator.serviceWorker.register('sw.js');
+      }
+  </script>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: #0d0d0d;
+      color: #e0e0e0;
+      display: flex;
+      justify-content: center;
+      padding: 40px 20px;
+      min-height: 100vh;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 480px;
+    }
+
+    h1 {
+      font-size: 1.5rem;
+      font-weight: 600;
+      margin-bottom: 8px;
+      letter-spacing: -0.5px;
+      color: #fff;
+    }
+
+    p.subtitle {
+      font-size: 0.85rem;
+      color: #777;
+      margin-bottom: 24px;
+    }
+
+    .input-group {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 32px;
+    }
+
+    input[type="text"] {
+      flex: 1;
+      padding: 12px 16px;
+      background: #181818;
+      border: 1px solid #2a2a2a;
+      border-radius: 8px;
+      color: #fff;
+      font-size: 0.95rem;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    input[type="text"]:focus {
+      border-color: #555;
+    }
+
+    button.btn-add {
+      padding: 12px 18px;
+      background: #252525;
+      border: 1px solid #333;
+      border-radius: 8px;
+      color: #fff;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.2s, transform 0.1s;
+    }
+
+    button.btn-add:hover {
+      background: #333;
+    }
+
+    button.btn-add:active {
+      transform: scale(0.98);
+    }
+
+    /* Visual Stack Container */
+    .stack-container {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    /* Card Layout & 3D Layering */
+    .card {
+      background: #161618;
+      border: 1px solid #28282c;
+      border-radius: 12px;
+      padding: 16px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+      transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+      position: relative;
+    }
+
+    /* Stack Overlaying Effect for the first 3 items */
+    .stack-container .card:nth-child(1) {
+      transform: translateY(0) scale(1);
+      z-index: 10;
+    }
+    .stack-container .card:nth-child(2) {
+      transform: translateY(-8px) scale(0.98);
+      z-index: 9;
+      opacity: 0.9;
+    }
+    .stack-container .card:nth-child(3) {
+      transform: translateY(-16px) scale(0.96);
+      z-index: 8;
+      opacity: 0.8;
+    }
+    .stack-container .card:nth-child(n+4) {
+      transform: translateY(-24px) scale(0.94);
+      z-index: 7;
+      opacity: 0.6;
+    }
+
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+
+    .status-badge {
+      font-size: 0.7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      padding: 4px 8px;
+      border-radius: 4px;
+    }
+
+    .locked .status-badge {
+      background: #2a2015;
+      color: #ff9800;
+      border: 1px solid #4a3210;
+    }
+
+    .unlocked .status-badge {
+      background: #12281a;
+      color: #4caf50;
+      border: 1px solid #1b4d27;
+    }
+
+    .timer {
+      font-size: 0.8rem;
+      font-family: monospace;
+      color: #aaa;
+    }
+
+    .card-text {
+      font-size: 1rem;
+      line-height: 1.4;
+      color: #eee;
+      margin-bottom: 16px;
+      word-break: break-word;
+    }
+
+    .card-actions {
+      display: flex;
+      gap: 8px;
+      justify-content: flex-end;
+    }
+
+    .btn-action {
+      padding: 6px 12px;
+      font-size: 0.8rem;
+      border-radius: 6px;
+      border: 1px solid transparent;
+      cursor: pointer;
+      font-weight: 500;
+      transition: all 0.2s;
+    }
+
+    .btn-discard {
+      background: #221515;
+      color: #ff6b6b;
+      border-color: #3d1c1c;
+    }
+
+    .btn-discard:hover {
+      background: #331b1b;
+      color: #ff8787;
+    }
+
+    .btn-execute {
+      background: #1b3a24;
+      color: #51cf66;
+      border-color: #2b5936;
+    }
+
+    .btn-execute:hover {
+      background: #234d30;
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 40px 0;
+      color: #444;
+      font-size: 0.9rem;
+    }
+
+    /* Sync Button Styles */
+    .footer-sync {
+      text-align: center;
+      margin-top: 40px;
+    }
+
+    .btn-sync {
+      background: transparent;
+      border: none;
+      color: #555;
+      font-size: 0.75rem;
+      cursor: pointer;
+      text-decoration: underline;
+      transition: color 0.2s;
+    }
+
+    .btn-sync:hover {
+      color: #888;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <h1>48-Hour Vault Stack</h1>
+    <p class="subtitle">Lock impulses, queries, and drafts for 48 hours before acting.</p>
+
+    <div class="input-group">
+      <input type="text" id="impulseInput" placeholder="Enter impulse or search query..." onkeydown="if(event.key==='Enter') addImpulse()">
+      <button class="btn-add" onclick="addImpulse()">Lock In</button>
+    </div>
+
+    <div id="stack" class="stack-container"></div>
+
+    <div class="footer-sync">
+      <button class="btn-sync" onclick="setSyncCredentials()">⚙️ Configure Cross-Device Sync</button>
+    </div>
+  </div>
+
+  <script>
+    // 48 hours in milliseconds
+    const FORTY_EIGHT_HOURS = 48 * 60 * 60 * 1000;
+
+    // --- SYNC FUNCTIONS ---
+    function getSyncCredentials() {
+      return {
+        binId: localStorage.getItem('vault_bin_id') || '',
+        apiKey: localStorage.getItem('vault_api_key') || ''
+      };
+    }
+
+    function setSyncCredentials() {
+      const current = getSyncCredentials();
+      const binId = prompt("Enter JSONBin Bin ID:", current.binId);
+      const apiKey = prompt("Enter JSONBin Master Key:", current.apiKey);
+      if (binId && apiKey) {
+        localStorage.setItem('vault_bin_id', binId.trim());
+        localStorage.setItem('vault_api_key', apiKey.trim());
+        alert("Sync keys saved! You won't have to enter them again.");
+        pullFromCloud();
+      }
+    }
+
+    async function pullFromCloud() {
+      const { binId, apiKey } = getSyncCredentials();
+      if (!binId || !apiKey || !navigator.onLine) return;
+
+      try {
+        const res = await fetch(`https://api.jsonbin.io/v3/b/${binId}/latest`, {
+          headers: { 'X-Master-Key': apiKey }
+        });
+        const data = await res.json();
+        if (data.record && Array.isArray(data.record)) {
+          saveVaultData(data.record);
+          renderStack();
+        }
+      } catch (err) {
+        console.log("Using local offline copy.");
+      }
+    }
+
+    async function pushToCloud(stack) {
+      const { binId, apiKey } = getSyncCredentials();
+      if (!binId || !apiKey || !navigator.onLine) return;
+
+      try {
+        await fetch(`https://api.jsonbin.io/v3/b/${binId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', 'X-Master-Key': apiKey },
+          body: JSON.stringify(stack)
+        });
+      } catch (err) {
+        console.log("Saved locally. Will sync when online.");
+      }
+    }
+
+    // --- VAULT CORE FUNCTIONS ---
+    function getVaultData() {
+      return JSON.parse(localStorage.getItem('vaultStack')) || [];
+    }
+
+    function saveVaultData(data) {
+      localStorage.setItem('vaultStack', JSON.stringify(data));
+    }
+
+    function addImpulse() {
+      const input = document.getElementById('impulseInput');
+      const text = input.value.trim();
+      if (!text) return;
+
+      const newItem = {
+        id: Date.now(),
+        text: text,
+        createdAt: Date.now()
+      };
+
+      const stack = getVaultData();
+      stack.unshift(newItem);
+      saveVaultData(stack);
+      pushToCloud(stack); // Sync to cloud on add
+
+      input.value = '';
+      renderStack();
+    }
+
+    function deleteItem(id) {
+      let stack = getVaultData();
+      stack = stack.filter(item => item.id !== id);
+      saveVaultData(stack);
+      pushToCloud(stack); // Sync to cloud on delete
+      renderStack();
+    }
+
+    function renderStack() {
+      const container = document.getElementById('stack');
+      const stack = getVaultData();
+      const now = Date.now();
+
+      container.innerHTML = '';
+
+      if (stack.length === 0) {
+        container.innerHTML = `<div class="empty-state">The stack is empty. Quiet mind.</div>`;
+        return;
+      }
+
+      stack.forEach((item) => {
+        const expiresAt = item.createdAt + FORTY_EIGHT_HOURS;
+        const remainingMs = expiresAt - now;
+        const isLocked = remainingMs > 0;
+
+        const card = document.createElement('div');
+        card.className = `card ${isLocked ? 'locked' : 'unlocked'}`;
+
+        let statusHTML = '';
+        let actionHTML = '';
+
+        if (isLocked) {
+          const totalSecs = Math.floor(remainingMs / 1000);
+          const hours = Math.floor(totalSecs / 3600);
+          const mins = Math.floor((totalSecs % 3600) / 60);
+          const secs = totalSecs % 60;
+
+          statusHTML = `
+            <span class="status-badge">Locked</span>
+            <span class="timer">${hours}h ${mins}m ${secs}s</span>
+          `;
+
+          actionHTML = `
+            <button class="btn-action btn-discard" onclick="deleteItem(${item.id})">Discard Impulse</button>
+          `;
+        } else {
+          statusHTML = `
+            <span class="status-badge">Ready</span>
+            <span class="timer">Unlocked</span>
+          `;
+
+          actionHTML = `
+            <button class="btn-action btn-discard" onclick="deleteItem(${item.id})">Discard</button>
+            <button class="btn-action btn-execute" onclick="deleteItem(${item.id})">Act / Done</button>
+          `;
+        }
+
+        card.innerHTML = `
+          <div class="card-header">
+            ${statusHTML}
+          </div>
+          <div class="card-text">${escapeHTML(item.text)}</div>
+          <div class="card-actions">
+            ${actionHTML}
+          </div>
+        `;
+
+        container.appendChild(card);
+      });
+    }
+
+    function escapeHTML(str) {
+      return str.replace(/[&<>'"]/g, 
+        tag => ({
+          '&': '&amp;',
+          '<': '&lt;',
+          '>': '&gt;',
+          "'": '&#39;',
+          '"': '&quot;'
+        }[tag] || tag)
+      );
+    }
+
+    // --- EVENT LISTENERS ---
+    
+    // Auto-Sync when internet connection returns
+    window.addEventListener('online', () => {
+      const stack = getVaultData();
+      pushToCloud(stack);
+    });
+
+    // Auto-Sync down from cloud on initial app load
+    window.addEventListener('DOMContentLoaded', () => {
+      pullFromCloud();
+    });
+
+    // Live update countdown timers every second
+    setInterval(renderStack, 1000);
+    renderStack();
+  </script>
+</body>
+</html>
